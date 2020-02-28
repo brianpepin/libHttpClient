@@ -314,7 +314,9 @@ private:
 
         inline operator uint64_t () const
         {
+#ifdef C_ASSERT
             C_ASSERT(sizeof(Address) == sizeof(uint64_t));
+#endif
             uint64_t v;
 
             // Note: this looks horribly inefficient.  General consensus
