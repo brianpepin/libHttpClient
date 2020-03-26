@@ -268,8 +268,8 @@ private:
 
     static HRESULT FactorialAllocateAsync(DWORD value, XAsyncBlock* async)
     {
-        void* context = &value;
-        HRESULT hr = XAsyncBeginAlloc(async, FactorialAsync, __FUNCTION__, FactorialWorkerDistributedWithSchedule, sizeof(FactorialCallData), &context);
+        void* context;
+        HRESULT hr = XAsyncBeginAlloc(async, FactorialAsync, __FUNCTION__, FactorialWorkerDistributedWithSchedule, &value, sizeof(FactorialCallData), &context);
         return hr;
     }
 

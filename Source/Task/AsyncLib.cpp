@@ -804,6 +804,7 @@ STDAPI XAsyncBeginAlloc(
     _In_opt_ const void* identity,
     _In_opt_ const char* identityName,
     _In_ XAsyncProvider* provider,
+    _In_opt_ void* initContext,
     _In_ size_t contextSize,
     _Inout_ void** context
     ) noexcept
@@ -834,7 +835,7 @@ STDAPI XAsyncBeginAlloc(
     // necessary to ensure that the async call state is properly
     // cleaned up, both for us and for the user call.
 
-    state->providerData.initContext = *context;
+    state->providerData.initContext = initContext;
     HRESULT hr = provider(XAsyncOp::Begin, &state->providerData);
     state->providerData.initContext = nullptr;
 
