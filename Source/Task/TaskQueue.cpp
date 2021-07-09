@@ -524,7 +524,7 @@ void __stdcall TaskQueuePortImpl::Terminate(
     referenced_ptr<ITaskQueuePortContext> cxt(term->portContext);
 
     // Prevent anything else from coming into the queue
-    cxt->SetStatus(TaskQueuePortStatus::Terminated);
+    cxt->SetStatus(TaskQueuePortStatus::Terminating);
 
     CancelPendingEntries(cxt.get(), true);
 
@@ -563,6 +563,7 @@ void __stdcall TaskQueuePortImpl::Detach(
 }
 
 bool __stdcall TaskQueuePortImpl::Dispatch(
+    _In_ ITaskQueuePortContext* portContext,
     _In_ uint32_t timeoutInMs)
 {
     bool found = false;
@@ -571,7 +572,7 @@ bool __stdcall TaskQueuePortImpl::Dispatch(
     {
         found = DrainOneItem();
 
-        if (!found && !Wait(timeoutInMs))
+        if (!found && !Wait(portContext, timeoutInMs))
         {
             break;
         }
@@ -651,12 +652,13 @@ bool TaskQueuePortImpl::DrainOneItem(
 // Returns true if the wait succeeded.  Returns false if it timed
 // out or the port is terminated.
 bool TaskQueuePortImpl::Wait(
+    _In_ ITaskQueuePortContext* portContext,
     _In_ uint32_t timeout)
 {
 #ifdef _WIN32
     while (m_suspended || (m_queueList->empty() && m_terminationList->empty()))
     {
-        if (IsPortTerminated())
+        if (portContext->GetStatus() == TaskQueuePortStatus::Terminated)
         {
             return false;
         }
@@ -707,7 +709,7 @@ bool TaskQueuePortImpl::Wait(
 #else
     while (m_suspended || (m_queueList->empty() && m_terminationList->empty()))
     {
-        if (IsPortTerminated())
+        if (portContext->GetStatus() == TaskQueuePortStatus::Terminated)
         {
             return false;
         }
@@ -1089,9 +1091,10 @@ void TaskQueuePortImpl::SignalTerminations()
 {
     m_terminationList->remove_if([this](auto& entry, auto address)
     {
-        if (entry->portContext->GetStatus() == TaskQueuePortStatus::Terminated)
+        if (entry->portContext->GetStatus() >= TaskQueuePortStatus::Terminating)
         {
             entry->callback(entry->callbackContext);
+            entry->portContext->SetStatus(TaskQueuePortStatus::Terminated);
             m_terminationList->free_node(address);
             delete entry;
             return true;
@@ -1121,23 +1124,6 @@ void TaskQueuePortImpl::ScheduleTermination(
 
     SignalQueue();
     NotifyItemQueued();
-}
-
-bool TaskQueuePortImpl::IsPortTerminated()
-{
-    // A port is considered terminated if all of the contexts
-    // it is attached to are terminated.
-
-    bool isTerminated = true;
-    m_attachedContexts.Visit([&isTerminated](ITaskQueuePortContext* context)
-    {
-        if (context->GetStatus() != TaskQueuePortStatus::Terminated)
-        {
-            isTerminated = false;
-        }
-    });
-
-    return isTerminated;
 }
 
 #ifdef _WIN32
@@ -1776,7 +1762,7 @@ STDAPI_(bool) XTaskQueueDispatch(
         return false;
     }
 
-    return portContext->GetPort()->Dispatch(timeoutInMs);
+    return portContext->GetPort()->Dispatch(portContext.get(), timeoutInMs);
 }
 
 //

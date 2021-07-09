@@ -67,6 +67,7 @@ struct ITaskQueuePort: IApi
         _In_ ITaskQueuePortContext* portContext) = 0;
 
     virtual bool __stdcall Dispatch(
+        _In_ ITaskQueuePortContext* portContext,
         _In_ uint32_t timeoutInMs) = 0;
 
     virtual bool __stdcall IsEmpty() = 0;
@@ -87,6 +88,7 @@ enum class TaskQueuePortStatus
 {
     Active,
     Canceled,
+    Terminating,
     Terminated
 };
 

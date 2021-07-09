@@ -193,6 +193,7 @@ public:
         _In_ ITaskQueuePortContext* portContext);
 
     bool __stdcall Dispatch(
+        _In_ ITaskQueuePortContext* portContext,
         _In_ uint32_t timeoutInMs);
 
     bool __stdcall IsEmpty();
@@ -285,6 +286,7 @@ private:
         _In_ OS::ThreadPoolActionStatus& status);
 
     bool Wait(
+        _In_ ITaskQueuePortContext* portContext,
         _In_ uint32_t timeout);
 
     static void EraseQueue(
@@ -299,7 +301,6 @@ private:
 
     void SignalTerminations();
     void ScheduleTermination(_In_ TerminationEntry* term);
-    bool IsPortTerminated();
 
     void SignalQueue();
     void NotifyItemQueued();
