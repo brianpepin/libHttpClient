@@ -83,13 +83,16 @@ struct ITaskQueuePort: IApi
 
 };
 
-// The status of a port on the queue.
+// The status of a port on the queue. This status is used in
+// comparisions, with later status values adopting the restrictions
+// of earier values.  For example, any status >= Canceled will
+// prevent new requests from being submitted to the port.
 enum class TaskQueuePortStatus
 {
-    Active,
-    Canceled,
-    Terminating,
-    Terminated
+    Active,         // Actively servicing requests
+    Canceled,       // Rejecting requests on the road to being terminated
+    Terminating,    // Termination actively in progress
+    Terminated      // Termination is complete.
 };
 
 // A task queue port context contains queue-specific data about a port.
