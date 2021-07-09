@@ -3,7 +3,6 @@ apply plugin: 'java'
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 buildscript {
     repositories {
-       jcenter()
        mavenCentral()
         maven {
             url "https://maven.google.com"
@@ -11,13 +10,12 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:4.0.0'
+        classpath 'com.android.tools.build:gradle:4.1.2'
     }
 }
 
 allprojects {
     repositories {
-        jcenter()
         mavenCentral()
         maven {
             url "https://maven.google.com"
@@ -25,7 +23,8 @@ allprojects {
     }
 }
 
-subprojects {
-    apply plugin: "com.android.library"
-    apply from: new File("common_android_config.gradle").getAbsolutePath()
+subprojects.each { prj ->
+    // Put all the Gradle build files under the /Binaries directory
+    def binariesDir = project.file("../../Binaries/Android/${prj.name}").getAbsolutePath()
+    prj.buildDir = new File(binariesDir)
 }

@@ -190,9 +190,10 @@ public:
     HRESULT connect_and_send_async();
 
 #if HC_WINHTTP_WEBSOCKETS
-    HRESULT send_websocket_message(WINHTTP_WEB_SOCKET_BUFFER_TYPE eBufferType, _In_ const void* payloadPtr, _In_ size_t payloadLength);
+    void send_websocket_message(WINHTTP_WEB_SOCKET_BUFFER_TYPE eBufferType, _In_ const void* payloadPtr, _In_ size_t payloadLength);
     HRESULT disconnect_websocket(_In_ HCWebSocketCloseStatus closeStatus);
     HRESULT on_websocket_disconnected(_In_ USHORT closeReason);
+    std::function<void(HRESULT)> m_websocketSendCompleteCallback;
     std::atomic<WinHttpWebsockState> m_socketState = WinHttpWebsockState::Created;
     HCWebsocketHandle m_websocketHandle = nullptr;
     HRESULT m_connectHr{ S_OK };
@@ -263,6 +264,10 @@ private:
         _In_ WINHTTP_WEB_SOCKET_BUFFER_TYPE bufferType
     );
 
+    static HRESULT flush_response_buffer(
+        _In_ winhttp_http_task* pRequestContext
+    );
+
     HRESULT query_security_information(_In_ http_internal_wstring wUrlHost);
 
     HRESULT send(_In_ const xbox::httpclient::Uri& cUri, _In_ const char* method);
@@ -302,8 +307,9 @@ private:
     HINTERNET m_hConnection = nullptr;
     HINTERNET m_hRequest = nullptr;
     msg_body_type m_requestBodyType = msg_body_type::no_body;
-    uint64_t m_requestBodyRemainingToWrite = 0;
-    uint64_t m_requestBodyOffset = 0;
+    size_t m_requestBodyRemainingToWrite = 0;
+    size_t m_requestBodyOffset = 0;
+    http_internal_vector<uint8_t> m_requestBuffer;
     http_internal_vector<uint8_t> m_responseBuffer;
     proxy_type m_proxyType = proxy_type::default_proxy;
     win32_cs m_lock;
@@ -314,7 +320,6 @@ private:
     // websocket state
     HRESULT websocket_start_listening();
     HRESULT websocket_read_message();
-    HANDLE m_hWebsocketWriteComplete = nullptr;
     websocket_message_buffer m_websocketResponseBuffer;
 #endif
 

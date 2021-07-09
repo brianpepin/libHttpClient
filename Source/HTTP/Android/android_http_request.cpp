@@ -4,11 +4,10 @@
 #include <httpClient/httpClient.h>
 #include <vector>
 
-HttpRequest::HttpRequest(XAsyncBlock* asyncBlock, JavaVM* javaVm, jobject applicationContext, jclass httpRequestClass, jclass httpResponseClass) :
+HttpRequest::HttpRequest(XAsyncBlock* asyncBlock, JavaVM* javaVm, jclass httpRequestClass, jclass httpResponseClass) :
     m_httpRequestInstance(nullptr), 
     m_asyncBlock(asyncBlock),
     m_javaVm(javaVm),
-    m_applicationContext(applicationContext),
     m_httpRequestClass(httpRequestClass),
     m_httpResponseClass(httpResponseClass)
 {
@@ -34,20 +33,6 @@ HRESULT HttpRequest::Initialize()
 
     if (SUCCEEDED(result)) 
     {
-        jmethodID networkAvailabilityFunc = jniEnv->GetStaticMethodID(m_httpRequestClass, "isNetworkAvailable", "(Landroid/content/Context;)Z");
-        if (networkAvailabilityFunc == nullptr)
-        {
-            HC_TRACE_ERROR(HTTPCLIENT, "Could not find isNetworkAvailable static method");
-            return E_FAIL;
-        }
-
-        jboolean isNetworkAvailable = jniEnv->CallStaticBooleanMethod(m_httpRequestClass, networkAvailabilityFunc, m_applicationContext);
-        if (!isNetworkAvailable)
-        {
-            HC_TRACE_ERROR(HTTPCLIENT, "Could not initialize HttpRequest - no network available");
-            return E_HC_NO_NETWORK;
-        }
-
         jmethodID httpRequestCtor = jniEnv->GetMethodID(m_httpRequestClass, "<init>", "()V");
         if (httpRequestCtor == nullptr) 
         {
@@ -134,18 +119,18 @@ HRESULT HttpRequest::AddHeader(const char* headerName, const char* headerValue)
     return S_OK;
 }
 
-HRESULT HttpRequest::SetMethodAndBody(const char* method, const char* contentType, const uint8_t* body, uint32_t bodySize)
+HRESULT HttpRequest::SetMethodAndBody(HCCallHandle call, const char* method, const char* contentType, uint32_t bodySize)
 {
     JNIEnv* jniEnv = nullptr;
     HRESULT result = GetJniEnv(&jniEnv);
 
-    if (!SUCCEEDED(result)) 
+    if (!SUCCEEDED(result))
     {
         return result;
     }
 
-    jmethodID httpRequestSetBody = jniEnv->GetMethodID(m_httpRequestClass, "setHttpMethodAndBody", "(Ljava/lang/String;Ljava/lang/String;[B)V");
-    if (httpRequestSetBody == nullptr) 
+    jmethodID httpRequestSetBody = jniEnv->GetMethodID(m_httpRequestClass, "setHttpMethodAndBody", "(Ljava/lang/String;JLjava/lang/String;J)V");
+    if (httpRequestSetBody == nullptr)
     {
         HC_TRACE_ERROR(HTTPCLIENT, "Could not find HttpClientRequest.setHttpMethodAndBody");
         return E_FAIL;
@@ -153,23 +138,12 @@ HRESULT HttpRequest::SetMethodAndBody(const char* method, const char* contentTyp
 
     jstring methodJstr = jniEnv->NewStringUTF(method);
     jstring contentTypeJstr = jniEnv->NewStringUTF(contentType);
-    jbyteArray bodyArray = nullptr;
-    
-    if (bodySize > 0)
+
+    jniEnv->CallVoidMethod(m_httpRequestInstance, httpRequestSetBody, methodJstr, reinterpret_cast<jlong>(call), contentTypeJstr, static_cast<jlong>(bodySize));
+
+    if (methodJstr != nullptr)
     {
-        bodyArray = jniEnv->NewByteArray(bodySize);
-        void *tempPrimitive = jniEnv->GetPrimitiveArrayCritical(bodyArray, 0);
-        memcpy(tempPrimitive, body, bodySize);
-        jniEnv->ReleasePrimitiveArrayCritical(bodyArray, tempPrimitive, 0);
-    }
-
-    jniEnv->CallVoidMethod(m_httpRequestInstance, httpRequestSetBody, methodJstr, contentTypeJstr, bodyArray);
-
-    jniEnv->DeleteLocalRef(methodJstr);
-
-    if (bodyArray != nullptr) 
-    {
-        jniEnv->DeleteLocalRef(bodyArray);
+        jniEnv->DeleteLocalRef(methodJstr);
     }
 
     if (contentTypeJstr != nullptr)
@@ -243,28 +217,14 @@ HRESULT HttpRequest::ProcessResponseBody(HCCallHandle call, jobject repsonse)
         return result;
     }
 
-    jmethodID httpResponseBodyMethod = jniEnv->GetMethodID(m_httpResponseClass, "getResponseBodyBytes", "()[B");
+    jmethodID httpResponseBodyMethod = jniEnv->GetMethodID(m_httpResponseClass, "getResponseBodyBytes", "()V");
     if (httpResponseBodyMethod == nullptr) 
     {
         HC_TRACE_ERROR(HTTPCLIENT, "Could not find HttpClientRequest.getResponseBodyBytes");
         return E_FAIL;
     }
 
-    jbyteArray responseBody = (jbyteArray)jniEnv->CallObjectMethod(repsonse, httpResponseBodyMethod);
-
-    if (responseBody != nullptr) 
-    {
-        int bodySize = jniEnv->GetArrayLength(responseBody);
-        if (bodySize > 0)
-        {
-            http_internal_vector<uint8_t> bodyBuffer(bodySize);
-            jniEnv->GetByteArrayRegion(responseBody, 0, bodySize, reinterpret_cast<jbyte*>(bodyBuffer.data()));
-
-            HCHttpCallResponseSetResponseBodyBytes(call, bodyBuffer.data(), bodyBuffer.size());
-        }
-    }
-
-    jniEnv->DeleteLocalRef(responseBody);
+    jniEnv->CallVoidMethod(repsonse, httpResponseBodyMethod);
     return S_OK;
 }
 
