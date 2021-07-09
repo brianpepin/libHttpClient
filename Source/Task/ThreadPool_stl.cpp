@@ -85,8 +85,9 @@ namespace OS
                             {
                                 m_calls--;
 
-                                // ActionComplete is an optional call
-                                // the callback can make to indicate 
+                                // ActionStatus offers a way for the call to
+                                // provide the threadpool of its status. It
+                                // can mark the call complete to indicate 
                                 // all portions of the call have finished
                                 // and it is safe to release the
                                 // thread pool, even if the callback has
@@ -97,22 +98,27 @@ namespace OS
                                 // member state is no longer accessed, but the
                                 // final release does need to wait on outstanding
                                 // calls.
+                                //
+                                // A call can also mark itself that it may run
+                                // long, which is often the case for work callbacks
+                                // in an async call.  This guides the thread pool
+                                // to allow more threads to be created if needed.
 
                                 {
                                     std::unique_lock<std::mutex> lock(m_activeLock);
                                     m_activeCalls++;
                                 }
 
-                                ActionCompleteImpl ac(this);
+                                ActionStatusImpl status(this);
 
                                 lock.unlock();
                                 AddRef();
-                                m_callback(m_context, ac);
+                                m_callback(m_context, status);
                                 lock.lock();
 
-                                if (!ac.Invoked)
+                                if (!status.IsComplete)
                                 {
-                                    ac();
+                                    status.Complete();
                                 }
 
                                 if (m_terminate)
@@ -191,18 +197,18 @@ namespace OS
 
     private:
 
-        struct ActionCompleteImpl : ThreadPoolActionComplete
+        struct ActionStatusImpl : ThreadPoolActionStatus
         {
-            ActionCompleteImpl(ThreadPoolImpl* owner) :
+            ActionStatusImpl(ThreadPoolImpl* owner) :
                 m_owner(owner)
             {
             }
 
-            bool Invoked = false;
+            bool IsComplete = false;
 
-            void operator()() override
+            void Complete() override
             {
-                Invoked = true;
+                IsComplete = true;
 
                 {
                     std::unique_lock<std::mutex> lock(m_owner->m_activeLock);
@@ -211,6 +217,11 @@ namespace OS
 
                 // Release lock before notify_all to optimize immediate awakes
                 m_owner->m_active.notify_all();
+            }
+
+            void MayRunLong() override
+            {
+                // NOP
             }
 
         private:

@@ -66,11 +66,8 @@ struct ITaskQueuePort: IApi
     virtual void __stdcall Detach(
         _In_ ITaskQueuePortContext* portContext) = 0;
 
-    virtual bool __stdcall DrainOneItem() = 0;
-
-    virtual bool __stdcall Wait(
-        _In_ ITaskQueuePortContext* portContext,
-        _In_ uint32_t timeout) = 0;
+    virtual bool __stdcall Dispatch(
+        _In_ uint32_t timeoutInMs) = 0;
 
     virtual bool __stdcall IsEmpty() = 0;
 
@@ -79,6 +76,10 @@ struct ITaskQueuePort: IApi
 
     virtual void __stdcall ResumeTermination(
         _In_ ITaskQueuePortContext* portContext) = 0;
+
+    virtual void __stdcall SuspendPort() = 0;
+    virtual void __stdcall ResumePort() = 0;
+
 };
 
 // The status of a port on the queue.

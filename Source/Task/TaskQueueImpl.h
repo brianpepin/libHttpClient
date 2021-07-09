@@ -36,7 +36,7 @@ public:
         uint32_t refs = --m_refs;
 
         // Note: rundown may addref/release as it
-        // progresses, so we guard agaisnt redundant
+        // progresses, so we guard against redundant
         // deletes with m_deleting.
 
         if (refs == 0 && m_deleting.test_and_set() == false)
@@ -76,9 +76,7 @@ protected:
         return nullptr;
     }
     
-    // Called when the object is "likely" about to be
-    // deleted.  There is no guarantee that an object
-    // will be deleted after this call.
+    // Called when the object is about to be deleted.
     virtual void RundownObject()
     {
     }
@@ -193,12 +191,9 @@ public:
 
     void __stdcall Detach(
         _In_ ITaskQueuePortContext* portContext);
-    
-    bool __stdcall DrainOneItem();
 
-    bool __stdcall Wait(
-        _In_ ITaskQueuePortContext* portContext,
-        _In_ uint32_t timeout);
+    bool __stdcall Dispatch(
+        _In_ uint32_t timeoutInMs);
 
     bool __stdcall IsEmpty();
 
@@ -207,6 +202,9 @@ public:
 
     void __stdcall ResumeTermination(
         _In_ ITaskQueuePortContext* portContext);
+
+    void __stdcall SuspendPort();
+    void __stdcall ResumePort();
 
 private:
 
@@ -257,6 +255,7 @@ private:
     OS::ThreadPool m_threadPool;
     std::atomic<uint64_t> m_timerDue = { UINT64_MAX };
     std::atomic<uint64_t> m_nextId = { 0 };
+    std::atomic<bool> m_suspended = { false };
 
 #ifdef _WIN32
     StaticArray<WaitRegistration*, PORT_WAIT_MAX> m_waits;
@@ -274,12 +273,19 @@ private:
     // be add-refd.
     bool AppendEntry(
         _In_ const QueueEntry& entry,
-        _In_opt_ uint64_t node = 0,
-        _In_ bool signal = true);
+        _In_opt_ uint64_t node = 0);
 
     void CancelPendingEntries(
         _In_ ITaskQueuePortContext* portContext,
         _In_ bool appendToQueue);
+
+    bool DrainOneItem();
+
+    bool DrainOneItem(
+        _In_ OS::ThreadPoolActionStatus& status);
+
+    bool Wait(
+        _In_ uint32_t timeout);
 
     static void EraseQueue(
         _In_opt_ LocklessQueue<QueueEntry>* queue);
@@ -293,18 +299,19 @@ private:
 
     void SignalTerminations();
     void ScheduleTermination(_In_ TerminationEntry* term);
+    bool IsPortTerminated();
 
     void SignalQueue();
+    void NotifyItemQueued();
 
-    void ProcessThreadPoolCallback(_In_ OS::ThreadPoolActionComplete& complete);
+    void ProcessThreadPoolCallback(_In_ OS::ThreadPoolActionStatus& status);
 
 #ifdef _WIN32
     HRESULT InitializeWaitRegistration(
         _In_ WaitRegistration* waitReg);
 
     bool AppendWaitRegistrationEntry(
-        _In_ WaitRegistration* waitReg,
-        _In_ bool signal = true);
+        _In_ WaitRegistration* waitReg);
 
     bool ReleaseWaitRegistration(
         _In_ WaitRegistration* waitReg);
@@ -417,6 +424,17 @@ protected:
 
 private:
 
+#ifdef SUSPEND_API
+    HRESULT InitializeSuspend();
+
+    static void CALLBACK OnSuspendWait(
+        _In_ PTP_CALLBACK_INSTANCE instance,
+        _Inout_opt_ void* context,
+        _Inout_ PTP_WAIT wait,
+        _In_ TP_WAIT_RESULT waitResult);
+
+#endif
+
     static void CALLBACK OnTerminationCallback(_In_ void* context);
 
 private:
@@ -452,6 +470,11 @@ private:
     TaskQueuePortContextImpl m_work;
     TaskQueuePortContextImpl m_completion;
     bool m_allowClose;
+
+#ifdef SUSPEND_API
+    PTP_WAIT m_suspendWait = nullptr;
+    bool m_suspended = false;
+#endif
 };
 
 inline ITaskQueue* GetQueue(XTaskQueueHandle handle)
