@@ -1572,8 +1572,19 @@ void TaskQueueImpl::RundownObject()
 {
     m_work.SetStatus(TaskQueuePortStatus::Terminated);
     m_completion.SetStatus(TaskQueuePortStatus::Terminated);
-    m_work.Port->Detach(&m_work);
-    m_completion.Port->Detach(&m_completion);
+
+    // We can be asked to rundown a partially created
+    // task queue, so check for nulls here.
+
+    if (m_work.Port != nullptr)
+    {
+        m_work.Port->Detach(&m_work);
+    }
+
+    if (m_completion.Port != nullptr)
+    {
+        m_completion.Port->Detach(&m_completion);
+    }
 
 #ifdef SUSPEND_API
     if (m_suspendWait != nullptr)
